@@ -192,6 +192,39 @@ def sorted_unique(series):
     return sorted(vals)
 
 
+def safe_pattern_count_slider(
+    label,
+    available_count,
+    minimum_count,
+    maximum_count,
+    default_count,
+):
+    """Return a valid Top-N value even when filters leave very few patterns."""
+    available_count = max(int(available_count), 0)
+
+    if available_count == 0:
+        return 0
+
+    slider_max = min(int(maximum_count), available_count)
+
+    # Streamlit raises StreamlitAPIException when min_value == max_value.
+    # In that case there is no choice to make, so show every available pattern.
+    if slider_max <= int(minimum_count):
+        st.caption(
+            f"{label}: showing all {available_count} available "
+            f"pattern{'s' if available_count != 1 else ''}."
+        )
+        return available_count
+
+    return st.slider(
+        label,
+        min_value=int(minimum_count),
+        max_value=slider_max,
+        value=min(int(default_count), slider_max),
+        step=1,
+    )
+
+
 def period_days_map(dates):
     dates = sorted(pd.to_datetime(pd.Series(dates).dropna().unique()))
     out = {}
@@ -1315,6 +1348,14 @@ pattern_summary, pattern_time_df = build_pattern_summary(
     vrr_weight=vrr_weight,
     value_driver=value_driver,
 )
+
+if pattern_summary.empty:
+    st.warning(
+        "No valid pattern data is available for the selected filters. "
+        "Please change the filter selection."
+    )
+    st.stop()
+
 injector_summary, injector_pattern_detail = build_injector_summary(
     filtered_df,
     pattern_summary,
@@ -1509,14 +1550,12 @@ with tab1:
 
     st.subheader("Top Patterns Over Time")
 
-    max_top_n = min(30, max(len(pattern_summary), 5))
-
-    top_n = st.slider(
+    top_n = safe_pattern_count_slider(
         "Top N patterns to show",
-        min_value=5,
-        max_value=max_top_n,
-        value=min(10, max_top_n),
-        step=1,
+        available_count=len(pattern_summary),
+        minimum_count=5,
+        maximum_count=30,
+        default_count=10,
     )
 
     top_patterns = pattern_summary.head(top_n)["Pattern_Name"].tolist()
@@ -1579,14 +1618,12 @@ with tab1:
 with tab2:
     st.subheader("Pattern Value Ranking")
 
-    max_rank_top_n = min(50, max(len(pattern_summary), 5))
-
-    rank_top_n = st.slider(
+    rank_top_n = safe_pattern_count_slider(
         "Top N ranked patterns",
-        min_value=5,
-        max_value=max_rank_top_n,
-        value=min(20, max_rank_top_n),
-        step=1,
+        available_count=len(pattern_summary),
+        minimum_count=5,
+        maximum_count=50,
+        default_count=20,
     )
 
     top_ranked = pattern_summary.head(rank_top_n).copy()
@@ -1675,14 +1712,12 @@ with tab2:
 with tab3:
     st.subheader("Pattern Health Heat Map")
 
-    max_heat_n = min(100, max(len(pattern_summary), 10))
-
-    heatmap_top_n = st.slider(
+    heatmap_top_n = safe_pattern_count_slider(
         "Number of patterns in heat map",
-        min_value=10,
-        max_value=max_heat_n,
-        value=min(40, max_heat_n),
-        step=5,
+        available_count=len(pattern_summary),
+        minimum_count=10,
+        maximum_count=100,
+        default_count=40,
     )
 
     heatmap_sort = st.selectbox(
